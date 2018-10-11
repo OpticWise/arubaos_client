@@ -51,5 +51,4 @@ aruba.cpu_load()
 # Get Memory usage
 aruba.memory_usage()
 
-#
 ```
