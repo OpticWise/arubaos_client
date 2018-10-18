@@ -32,9 +32,6 @@ class MobilityControllerAPIClient(object):
         :
     '''
 
-    def lookup(self, key):
-        pass
-
     def __init__(self, **kwargs):
         '''
             Args:
@@ -55,7 +52,7 @@ class MobilityControllerAPIClient(object):
         self.username = kwargs['username']
         self.password = kwargs['password']
         self.url = kwargs['url']
-        self.verify = kwargs.get('verify', True)
+        self.verify = kwargs.get('verify', False)
         proxy = kwargs.get('proxy', None)
         self.proxies = None
         if proxy:
@@ -73,18 +70,21 @@ class MobilityControllerAPIClient(object):
         '''
         self.session = requests.Session()
         self.session.proxies = self.proxies
-        self.session.verify = False
+        self.session.verify = self.verify
         url = self.path('api/login')
         params = {'username': self.username,
                   'password': self.password,
                   }
-        login = self.session.get(url, params=params, verify=False)
+        login = self.session.get(url, params=params)
         if login.ok:
             self.uid = {'UIDARUBA': login.json()['_global_result']['UIDARUBA']}
             self.session.params = self.uid
         return login.ok
 
     def logout(self):
+        '''
+            Close the session to the device
+        '''
         if not self.session:
             raise Exception("You need to login")
         url = self.path('api/logout')
@@ -92,6 +92,9 @@ class MobilityControllerAPIClient(object):
         return logout.ok
 
     def get(self, ressource):
+        '''
+            get an api ressource
+        '''
         url = self.path(ressource)
         print(url)
         answer = self.session.get(url)
@@ -100,6 +103,15 @@ class MobilityControllerAPIClient(object):
         return {}
 
     def by_command(self, command):
+        '''
+            Get information by show <> command
+            Args:
+                :command (str): command must be a show command
+
+            Returns:
+                :answer (dict): {}
+
+        '''
         url = self.path('configuration/showcommand')
         params = {
             "json": 1,
@@ -111,6 +123,11 @@ class MobilityControllerAPIClient(object):
         return {}
 
     def sys_info(self):
+        '''
+            Return system information
+            Returns:
+                :answer (dict): {}
+        '''
         url = self.path('configuration/container/sys_info')
         answer = self.session.get(url)
         if answer.ok:
@@ -119,6 +136,14 @@ class MobilityControllerAPIClient(object):
             return {}
 
     def clients(self, band="2g"):
+        '''
+            Gets Amount of clients by Band.
+            Args:
+                :band (str): 2g or 5g band (self.bands)
+
+            Returns:
+                :answer (dict): {}
+        '''
         if band not in list(self.bands.keys()):
             raise Exception("Unsupported Band Type: {} :: Only {} are supported.".format(
                 band, "or ".join(self.bands.keys())))
@@ -128,13 +153,27 @@ class MobilityControllerAPIClient(object):
         return self._restructure_client_count(data)
 
     def clients_2g(self):
+        '''
+            Wrapper for self.clients(band='2g')
+        '''
         return self.clients(band="2g")
 
     def clients_5g(self):
+        '''
+            Wrapper for self.clients(band='5g')
+        '''
         return self.clients(band="5g")
 
     def aps(self, group=None, long=True):
+        '''
+            Gets a list of aps
+            Args:
+                :group (str): group Notation
+                :long (bool): extensive information
 
+            Returns:
+                :url (list): List of APs
+        '''
         answer = self.by_command('show ap database {}{}'.format(
             "long " if long else "",
             "group {}".format(group) if group else "local")
@@ -143,6 +182,13 @@ class MobilityControllerAPIClient(object):
         return self._restructure_flags_data(answer)
 
     def ap_by_mac(self, ap_mac):
+        '''
+            Args:
+                :ap_mac (str): MAC address in xx:xx:xx:xx:xx:xx  notation
+
+            Returns:
+                :url (str): '<self.url/path>'
+        '''
         if not mac_regex.match(ap_mac):
             raise Exception("Invalid MAC Address: {}".format(ap_mac))
         answer = self.by_command(
@@ -150,11 +196,24 @@ class MobilityControllerAPIClient(object):
         return {ap_mac: self._restructure_provisioning_output(answer)}
 
     def ap(self, ap_name):
+        '''
+            Get information about a ap_name
+            Args:
+                :ap_name (str): Name of the AP
+
+            Returns:
+                :ap (dict): {ap_name: statistics}
+        '''
         answer = self.by_command('show ap active ap-name {}'.format(ap_name))
         answer = self._right_typing(answer)
         return {ap_name: self._restructure_flags_data(answer)}
 
     def cpu_load(self):
+        '''
+
+            Returns:
+                :cpu (dict): {}
+        '''
         data = self.by_command('show cpuload')
         data = data.get('_data', [""])[0]
         data = cpu_regex.findall(data)
@@ -164,6 +223,11 @@ class MobilityControllerAPIClient(object):
         return cpu
 
     def memory_usage(self):
+        '''
+
+            Returns:
+                :memory_usage (dict): {}
+        '''
         data = self.by_command('show memory')
         data = data.get('_data', [""])[0]
         data = memory_regex.findall(data)
@@ -173,7 +237,7 @@ class MobilityControllerAPIClient(object):
         return ram
 
     def path(self, path):
-        '''v1/configurationv1/configuration
+        '''
             builds up the complete URL
 
             Args:
@@ -187,6 +251,13 @@ class MobilityControllerAPIClient(object):
 # Private Parsing Functions
 
     def _try_cast(self, value):
+        '''
+            Args:
+                :value (dict): {..}
+
+            Returns:
+                :value (dict): casted
+        '''
         try:
             return float(value)
         except:
