@@ -48,6 +48,7 @@ class MobilityControllerAPIClient(object):
             >>>
         '''
         self.bands = {"2g": 'g', "5g": 'a'}
+        self.config_path = kwargs.get('config_path', '/mm/mynode')
         self.api_version = kwargs.get('api_version', 1)
         self.username = kwargs['username']
         self.password = kwargs['password']
@@ -207,6 +208,32 @@ class MobilityControllerAPIClient(object):
         answer = self.by_command('show ap active ap-name {}'.format(ap_name))
         answer = self._right_typing(answer)
         return {ap_name: self._restructure_flags_data(answer)}
+
+    def ap_re_group_mac(self, ap_mac, ap_group):
+        value = {}
+        url = self.path('configuration/object/wdb_cpsec_modify_mac')
+        data = {
+            "name": ap_mac,
+            "ap_group": ap_group
+        }
+
+        answer = self.session.post(url, params={"config_path": self.config_path}, json=data)
+        
+        if answer.ok:
+            value["wdb_cpsec_modify_mac"] = answer.json()
+        else:
+            value["wdb_cpsec_modify_mac"] = {}
+        data = {
+            "wired-mac": ap_mac,
+            "new-group": ap_group
+        }
+        url = self.path('configuration/object/ap_regroup')
+        answer = self.session.post(url, params={"config_path": self.config_path}, json=data)
+        if answer.ok:
+            value["ap_regroup"] = answer.json()
+        else:
+            value["ap_regroup"] = {}
+        return value
 
     def cpu_load(self):
         '''
