@@ -19,7 +19,9 @@ user_regex = re.compile(r'^(?P<key>.*?): (?P<actual>\d+)/(?P<max>\d+)$')
 flag_regex = re.compile(r'(?P<flag>.*?) = (?P<meaning>.*?)(?:; |;|$)')
 flag_replace_regex = re.compile(r' followed by \&quot;.*')
 essid_regex = re.compile(r'^\s*\d+(?P<radio>\w) \w+ (?P<ESSID>.*?) (?:Stats)$')
-eirp_regex = re.compile(r'^.*?/(?P<eirp>\d+.\d+)/(?P<max_eirp>\d+.\d+)$')
+eirp_regex = re.compile(r'^.*?\/(?P<eirp>\d+.\d+)\/(?P<max_eirp>\d+.\d+)$')
+eirp_regex_clients = re.compile(
+    r'^.*?\/(?P<eirp>\d+.\d+)\/(?P<max_eirp>\d+.\d+)\/(?P<clients>\d+)$')
 mac_regex = re.compile(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$')
 
 
@@ -217,8 +219,9 @@ class MobilityControllerAPIClient(object):
             "ap_group": ap_group
         }
 
-        answer = self.session.post(url, params={"config_path": self.config_path}, json=data)
-        
+        answer = self.session.post(
+            url, params={"config_path": self.config_path}, json=data)
+
         if answer.ok:
             value["wdb_cpsec_modify_mac"] = answer.json()
         else:
@@ -228,7 +231,8 @@ class MobilityControllerAPIClient(object):
             "new-group": ap_group
         }
         url = self.path('configuration/object/ap_regroup')
-        answer = self.session.post(url, params={"config_path": self.config_path}, json=data)
+        answer = self.session.post(
+            url, params={"config_path": self.config_path}, json=data)
         if answer.ok:
             value["ap_regroup"] = answer.json()
         else:
@@ -292,12 +296,19 @@ class MobilityControllerAPIClient(object):
                 return float(0)
             return value
 
-    def _parse_eirp(self, value):
-        try:
-            eirp, max_eirp = eirp_regex.findall(value)[0]
-            return self._try_cast(eirp), self._try_cast(max_eirp)
-        except TypeError:
-            return 0.0, 0.0
+    def _parse_eirp(self, value, other_regex=False):
+        if not other_regex:
+            try:
+                eirp, max_eirp = eirp_regex.findall(value)[0]
+                return self._try_cast(eirp), self._try_cast(max_eirp)
+            except TypeError:
+                return 0.0, 0.0
+        else:
+            try:
+                eirp, max_eirp, clients = eirp_regex_clients.findall(value)[0]
+                return self._try_cast(clients), self._try_cast(eirp), self._try_cast(max_eirp)
+            except TypeError:
+                return 0.0, 0.0, 0.0
 
     def _restructure_client_count(self, values):
         data = values['_data'][0]
@@ -380,17 +391,30 @@ class MobilityControllerAPIClient(object):
                 for item in items:
                     item['Uptime'] = parse(
                         item['Uptime'].replace(":", ""))
-                    item['11a Clients'.lower().replace(
-                        ' ', '_')] = self._try_cast(item['11a Clients'])
-                    item['11g Clients'.lower().replace(
-                        ' ', '_')] = self._try_cast(item['11g Clients'])
-                    item['11a_info'] = item['11g_info'] = {}
-                    item['11a_info']['eirp'], item['11a_info']['max_eirp'] = self._parse_eirp(
-                        item["11a Ch/EIRP/MaxEIRP"])
-                    item['11g_info']['eirp'], item['11g_info']['max_eirp'] = self._parse_eirp(
-                        item["11g Ch/EIRP/MaxEIRP"])
-                    del(item["11a Ch/EIRP/MaxEIRP"])
-                    del(item["11g Ch/EIRP/MaxEIRP"])
+                    if '11a Clients' not in item.keys():
+                        item['11a_info'] = {}
+                        item['11a Clients'.lower().replace(
+                            ' ', '_')], item['11a_info']['eirp'], item['11a_info']['max_eirp'] = self._parse_eirp(
+                            item["Radio 0 Band Ch/EIRP/MaxEIRP/Clients"], other_regex=True)
+                        item['11g_info'] = {}
+                        item['11g Clients'.lower().replace(
+                            ' ', '_')], item['11g_info']['eirp'], item['11g_info']['max_eirp'] = self._parse_eirp(
+                            item["Radio 1 Band Ch/EIRP/MaxEIRP/Clients"],
+                            other_regex=True)
+                        del(item["Radio 0 Band Ch/EIRP/MaxEIRP/Clients"])
+                        del(item["Radio 1 Band Ch/EIRP/MaxEIRP/Clients"])
+                    else:
+                        item['11a Clients'.lower().replace(
+                            ' ', '_')] = self._try_cast(item['11a Clients'])
+                        item['11g Clients'.lower().replace(
+                            ' ', '_')] = self._try_cast(item['11g Clients'])
+                        item['11a_info'] = item['11g_info'] = {}
+                        item['11a_info']['eirp'], item['11a_info']['max_eirp'] = self._parse_eirp(
+                            item["11a Ch/EIRP/MaxEIRP"])
+                        item['11g_info']['eirp'], item['11g_info']['max_eirp'] = self._parse_eirp(
+                            item["11g Ch/EIRP/MaxEIRP"])
+                        del(item["11a Ch/EIRP/MaxEIRP"])
+                        del(item["11g Ch/EIRP/MaxEIRP"])
         values = {**data, **values}
         keys = list(values.keys())
         for key in keys:
