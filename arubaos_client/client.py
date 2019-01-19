@@ -324,7 +324,12 @@ class MobilityControllerAPIClient(object):
         return values
 
     def _restructure_flags_data(self, values):
-        data = values['_data']
+        data = values.get('_data')
+        if not data:
+            for key in ['_meta', '_data']:
+                if key in values.keys():
+                    del(values[key])
+            return values
         data = "".join(data)
         data = data.replace("Flags: ", "")
         data = flag_replace_regex.sub("", data)
