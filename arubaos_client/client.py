@@ -292,7 +292,7 @@ class MobilityControllerAPIClient(object):
         try:
             return float(value)
         except:
-            if value in ['N/A'] or 'bps' in value:
+            if value in ['N/A', '-'] or 'bps' in value:
                 return float(0)
             return value
 
@@ -425,5 +425,6 @@ class MobilityControllerAPIClient(object):
         for key in keys:
             if essid_regex.match(key):
                 del(values[key])
-
+        if 'stats' not in values.keys():
+            values['stats'] = {}
         return values
