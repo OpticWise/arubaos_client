@@ -28,6 +28,7 @@ setup(
 
     description='Aruba OS REST API Client.',
     long_description=LONG_DESCRIPTION,
+    long_description_content_type="text/markdown",
 
     # The project's main homepage.
     url='https://github.com/Selfnet/arubaos_client',
