@@ -4,6 +4,7 @@ import urllib3
 from pprint import pprint
 import time
 import re
+import logging
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -49,8 +50,9 @@ class MobilityControllerAPIClient(object):
             >>>                            url='https://<ip_addr|hostname>:<port>/')
             >>>
         '''
+        self._log = logging.getLogger("arubaos_client")
         self.bands = {"2g": 'g', "5g": 'a'}
-        self.config_path = kwargs.get('config_path', '/mm/mynode')
+        self.config_path = kwargs.get('config_path', '')
         self.api_version = kwargs.get('api_version', 1)
         self.username = kwargs['username']
         self.password = kwargs['password']
@@ -78,10 +80,13 @@ class MobilityControllerAPIClient(object):
         params = {'username': self.username,
                   'password': self.password,
                   }
+        self._log.debug("login url: %s", url)
         login = self.session.get(url, params=params)
         if login.ok:
-            self.uid = {'UIDARUBA': login.json()['_global_result']['UIDARUBA']}
-            self.session.params = self.uid
+            # New API deprecates UIDARUBA in favor of X-CSRF-Token
+            self.uid = {'X-CSRF-Token': login.json()['_global_result']['X-CSRF-Token']}
+            self._log.debug("login result headers: %s", self.session.headers)
+            self.session.headers.update(self.uid)
         return login.ok
 
     def logout(self):
@@ -99,7 +104,7 @@ class MobilityControllerAPIClient(object):
             get an api ressource
         '''
         url = self.path(ressource)
-        print(url)
+        self._log.debug("get url: %s", url)
         answer = self.session.get(url)
         if answer.ok:
             return answer.text
@@ -120,6 +125,11 @@ class MobilityControllerAPIClient(object):
             "json": 1,
             "command": command
         }
+        headers = self.session.headers
+        headers.update(self.uid)
+        self.session.headers = headers
+        self._log.debug("show command headers: %s", self.session.headers)
+        self._log.debug("url: %s", url)
         answer = self.session.get(url, params=params)
         if answer.ok:
             return answer.json()
@@ -181,8 +191,10 @@ class MobilityControllerAPIClient(object):
             "long " if long else "",
             "group {}".format(group) if group else "local")
         )
-        answer = self._restructure_database_output(answer)
-        return self._restructure_flags_data(answer)
+        # no longer needed with new API
+        #answer = self._restructure_database_output(answer)
+        #return self._restructure_flags_data(answer)
+        return answer
 
     def ap_by_mac(self, ap_mac):
         '''
